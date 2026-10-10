@@ -21,7 +21,10 @@ test("removes a via pair with a clear shortcut above an opposite-layer pad", () 
       { x: 3, y: 0, z: 0 },
       { x: 4, y: 0, z: 0 },
     ],
-    vias: [{ x: 1, y: 0 }, { x: 3, y: 0 }],
+    vias: [
+      { x: 1, y: 0 },
+      { x: 3, y: 0 },
+    ],
   }
   const obstacles: Obstacle[] = [
     {
@@ -55,6 +58,8 @@ test("removes a via pair with a clear shortcut above an opposite-layer pad", () 
 
   expect(solver.failed).toBe(false)
   expect(solver.getOptimizedHdRoute().vias).toHaveLength(0)
-  expect(solver.getOptimizedHdRoute().route.every((point) => point.z === 0)).toBe(true)
+  expect(
+    solver.getOptimizedHdRoute().route.every((point) => point.z === 0),
+  ).toBe(true)
   expect(solver.stats.viasRemovedByGeometryShortcuts).toBe(2)
 })

@@ -11,7 +11,10 @@ test("detour validation checks pads only on the candidate layer", () => {
     connectionName: "moving_net",
     traceThickness: 0.15,
     viaDiameter: 0.3,
-    route: [{ x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }],
+    route: [
+      { x: 0, y: 0, z: 0 },
+      { x: 2, y: 0, z: 0 },
+    ],
     vias: [],
   }
   const connMap = new ConnectivityMap({ moving_net: [route.connectionName] })
@@ -21,7 +24,7 @@ test("detour validation checks pads only on the candidate layer", () => {
       center: { x: 1, y: 0 },
       width: 0.5,
       height: 0.5,
-      layers: zLayers.map((z) => z === 0 ? "top" : "bottom"),
+      layers: zLayers.map((z) => (z === 0 ? "top" : "bottom")),
       __zLayers: zLayers,
       connectedTo: ["other_net"],
     }
