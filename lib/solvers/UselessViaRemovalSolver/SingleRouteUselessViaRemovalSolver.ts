@@ -277,7 +277,9 @@ export class SingleRouteUselessViaRemovalSolver extends BaseSolver {
     targetZ: number,
     maxPathLength: number,
     traceCornersOnly = false,
-    validateLongestSegment?: ReturnType<typeof createObstacleDetourPathValidator>,
+    validateLongestSegment?: ReturnType<
+      typeof createObstacleDetourPathValidator
+    >,
   ): ObstacleDetourPath[] {
     const { traceCorners, corridorXs, corridorYs } =
       this.getObstacleDetourContext(start, end, targetZ)
@@ -305,10 +307,16 @@ export class SingleRouteUselessViaRemovalSolver extends BaseSolver {
             longestLengthSquared = lengthSquared
           }
         }
-        if (!validateLongestSegment([
-          { ...points[longestIndex], z: start.z },
-          { ...points[longestIndex + 1], z: start.z },
-        ], 0)) return
+        if (
+          !validateLongestSegment(
+            [
+              { ...points[longestIndex], z: start.z },
+              { ...points[longestIndex + 1], z: start.z },
+            ],
+            0,
+          )
+        )
+          return
       }
       const path = this.normalizeShortcutPath(points, start, end)
       let longestSegmentIndex = 0
@@ -512,17 +520,19 @@ export class SingleRouteUselessViaRemovalSolver extends BaseSolver {
     // searches switch to numeric IDs to avoid rebuilding coordinate strings for
     // thousands of candidates that repeatedly share corridor segments.
     const shouldUseNumericSegmentKeys = candidateShortcuts.length >= 256
-    const validateObstacleDetourPath = earlyValidator ?? createObstacleDetourPathValidator({
-      targetZ: previousSection.z,
-      route: this.unsimplifiedRoute,
-      hdRouteSHI: this.hdRouteSHI,
-      obstacleSHI: this.obstacleSHI,
-      connMap: this.connMap,
-      defaultTraceThickness: this.TRACE_THICKNESS,
-      obstacleMargin: this.GEOMETRY_SHORTCUT_OBSTACLE_MARGIN,
-      traceMargin: this.GEOMETRY_SHORTCUT_TRACE_MARGIN,
-      useNumericSegmentKeys: shouldUseNumericSegmentKeys,
-    })
+    const validateObstacleDetourPath =
+      earlyValidator ??
+      createObstacleDetourPathValidator({
+        targetZ: previousSection.z,
+        route: this.unsimplifiedRoute,
+        hdRouteSHI: this.hdRouteSHI,
+        obstacleSHI: this.obstacleSHI,
+        connMap: this.connMap,
+        defaultTraceThickness: this.TRACE_THICKNESS,
+        obstacleMargin: this.GEOMETRY_SHORTCUT_OBSTACLE_MARGIN,
+        traceMargin: this.GEOMETRY_SHORTCUT_TRACE_MARGIN,
+        useNumericSegmentKeys: shouldUseNumericSegmentKeys,
+      })
     for (const shortcut of candidateShortcuts) {
       candidatesValidated++
       const { path } = shortcut
