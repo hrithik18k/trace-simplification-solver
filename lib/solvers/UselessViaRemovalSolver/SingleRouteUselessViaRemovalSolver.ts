@@ -29,6 +29,13 @@ type ObstacleDetourPath = {
   longestSegmentIndex: number
 }
 
+type ObstacleDetourContext = {
+  targetZ: number
+  traceCorners: Array<{ x: number; y: number }>
+  corridorXs: Set<number>
+  corridorYs: Set<number>
+}
+
 type MultilayerSectionCollapse = {
   targetZ: number
   mergeWith: "previous" | "next"
@@ -49,6 +56,11 @@ export class SingleRouteUselessViaRemovalSolver extends BaseSolver {
   routeSections: Array<RouteSection>
 
   currentSectionIndex: number
+  private readonly sameNetRouteCache = new WeakMap<HighDensityRoute, boolean>()
+  private detourContexts = new WeakMap<
+    RoutePoint,
+    WeakMap<RoutePoint, ObstacleDetourContext>
+  >()
 
   TRACE_THICKNESS = 0.15
   OBSTACLE_MARGIN = 0.1
@@ -57,6 +69,7 @@ export class SingleRouteUselessViaRemovalSolver extends BaseSolver {
   MAX_GEOMETRY_SHORTCUT_ADDED_LENGTH = 4
   ENABLE_GEOMETRY_SHORTCUTS = true
   ENABLE_OBSTACLE_DETOUR_SHORTCUTS = false
+  ENABLE_ROUTED_TRACE_DETOURS = false
   PRESERVE_ROUTE_ENDPOINTS = false
 
   geometryShortcutsApplied = 0
@@ -73,6 +86,7 @@ export class SingleRouteUselessViaRemovalSolver extends BaseSolver {
     geometryShortcutObstacleMargin?: number
     enableGeometryShortcuts?: boolean
     enableObstacleDetourShortcuts?: boolean
+    enableRoutedTraceDetours?: boolean
     preserveRouteEndpoints?: boolean
     terminalLayerIndicesByPcbPortId?: ReadonlyMap<string, ReadonlySet<number>>
   }) {
@@ -93,6 +107,7 @@ export class SingleRouteUselessViaRemovalSolver extends BaseSolver {
     this.ENABLE_GEOMETRY_SHORTCUTS = params.enableGeometryShortcuts ?? true
     this.ENABLE_OBSTACLE_DETOUR_SHORTCUTS =
       params.enableObstacleDetourShortcuts ?? false
+    this.ENABLE_ROUTED_TRACE_DETOURS = params.enableRoutedTraceDetours ?? false
     this.PRESERVE_ROUTE_ENDPOINTS = params.preserveRouteEndpoints ?? false
 
     this.routeSections = breakRouteIntoSections(this.unsimplifiedRoute)
@@ -147,12 +162,34 @@ export class SingleRouteUselessViaRemovalSolver extends BaseSolver {
     return false
   }
 
-  private getObstacleDetourPaths(
+  private isRouteOnSameNet(route: HighDensityRoute): boolean {
+    const cached = this.sameNetRouteCache.get(route)
+    if (cached !== undefined) return cached
+    const routeIds = [
+      this.unsimplifiedRoute.connectionName,
+      this.unsimplifiedRoute.rootConnectionName,
+    ].filter((id): id is string => id !== undefined)
+    const otherIds = [route.connectionName, route.rootConnectionName].filter(
+      (id): id is string => id !== undefined,
+    )
+    const isSameNet = routeIds.some((id) =>
+      otherIds.some(
+        (other) => id === other || this.connMap.areIdsConnected(id, other),
+      ),
+    )
+    this.sameNetRouteCache.set(route, isSameNet)
+    return isSameNet
+  }
+
+  private getObstacleDetourContext(
     start: RoutePoint,
     end: RoutePoint,
     targetZ: number,
-    maxPathLength: number,
-  ): ObstacleDetourPath[] {
+  ): ObstacleDetourContext {
+    const cached = this.ENABLE_ROUTED_TRACE_DETOURS
+      ? this.detourContexts.get(start)?.get(end)
+      : undefined
+    if (cached?.targetZ === targetZ) return cached
     const traceThickness =
       this.unsimplifiedRoute.traceThickness ?? this.TRACE_THICKNESS
     const corridorMargin =
@@ -166,8 +203,16 @@ export class SingleRouteUselessViaRemovalSolver extends BaseSolver {
     const obstacles = this.obstacleSHI
       .search({ minX, minY, maxX, maxY })
       .filter((obstacle) => obstacle.__zLayers?.includes(targetZ))
-    if (obstacles.length === 0) return []
+    const blockingRoutes = this.ENABLE_ROUTED_TRACE_DETOURS
+      ? this.hdRouteSHI.getConflictingRoutesForSegment(
+          { ...start, z: targetZ },
+          { ...end, z: targetZ },
+          traceThickness / 2 + this.GEOMETRY_SHORTCUT_TRACE_MARGIN,
+          (route): boolean => this.isRouteOnSameNet(route),
+        )
+      : []
 
+    const traceCorners: Array<{ x: number; y: number }> = []
     const corridorXs = new Set<number>()
     const corridorYs = new Set<number>()
     for (const obstacle of obstacles) {
@@ -177,6 +222,65 @@ export class SingleRouteUselessViaRemovalSolver extends BaseSolver {
       corridorYs.add(obstacle.center.y + obstacle.height / 2 + corridorMargin)
     }
 
+    // Routed copper can block the direct same-layer shortcut even when no
+    // pad blocks it. Try the copper's clearance boundaries as detour corridors.
+    // Keep the search local and validate these candidates with the same index
+    // and outline checks as obstacle detours.
+    for (const { conflictingRoute } of blockingRoutes) {
+      const points = conflictingRoute.route.filter(
+        (point) =>
+          point.z === targetZ &&
+          point.x >= minX &&
+          point.x <= maxX &&
+          point.y >= minY &&
+          point.y <= maxY,
+      )
+      if (points.length === 0) continue
+      const margin =
+        traceThickness / 2 +
+        Math.max(
+          conflictingRoute.traceThickness / 2,
+          conflictingRoute.viaDiameter / 2,
+        ) +
+        this.GEOMETRY_SHORTCUT_TRACE_MARGIN +
+        1e-6
+      corridorXs.add(Math.min(...points.map((point) => point.x)) - margin)
+      corridorXs.add(Math.max(...points.map((point) => point.x)) + margin)
+      corridorYs.add(Math.min(...points.map((point) => point.y)) - margin)
+      corridorYs.add(Math.max(...points.map((point) => point.y)) + margin)
+      {
+        const x1 = Math.min(...points.map((point) => point.x)) - margin
+        const x2 = Math.max(...points.map((point) => point.x)) + margin
+        const y1 = Math.min(...points.map((point) => point.y)) - margin
+        const y2 = Math.max(...points.map((point) => point.y)) + margin
+        traceCorners.push(
+          { x: x1, y: y1 },
+          { x: x1, y: y2 },
+          { x: x2, y: y1 },
+          { x: x2, y: y2 },
+        )
+      }
+    }
+
+    const context = { targetZ, traceCorners, corridorXs, corridorYs }
+    if (this.ENABLE_ROUTED_TRACE_DETOURS) {
+      const endContexts = this.detourContexts.get(start) ?? new WeakMap()
+      endContexts.set(end, context)
+      this.detourContexts.set(start, endContexts)
+    }
+    return context
+  }
+
+  private getObstacleDetourPaths(
+    start: RoutePoint,
+    end: RoutePoint,
+    targetZ: number,
+    maxPathLength: number,
+    traceCornersOnly = false,
+    validateLongestSegment?: ReturnType<typeof createObstacleDetourPathValidator>,
+  ): ObstacleDetourPath[] {
+    const { traceCorners, corridorXs, corridorYs } =
+      this.getObstacleDetourContext(start, end, targetZ)
     const paths: ObstacleDetourPath[] = []
     const pathKeys = new Set<string>()
     const addPath = (points: Array<{ x: number; y: number }>) => {
@@ -189,6 +293,23 @@ export class SingleRouteUselessViaRemovalSolver extends BaseSolver {
       }
       if (pathLength > maxPathLength) return
 
+      if (validateLongestSegment) {
+        let longestIndex = 0
+        let longestLengthSquared = -1
+        for (let index = 0; index < points.length - 1; index++) {
+          const dx = points[index + 1].x - points[index].x
+          const dy = points[index + 1].y - points[index].y
+          const lengthSquared = dx * dx + dy * dy
+          if (lengthSquared > longestLengthSquared) {
+            longestIndex = index
+            longestLengthSquared = lengthSquared
+          }
+        }
+        if (!validateLongestSegment([
+          { ...points[longestIndex], z: start.z },
+          { ...points[longestIndex + 1], z: start.z },
+        ], 0)) return
+      }
       const path = this.normalizeShortcutPath(points, start, end)
       let longestSegmentIndex = 0
       let longestSegmentLengthSquared = -1
@@ -205,6 +326,16 @@ export class SingleRouteUselessViaRemovalSolver extends BaseSolver {
       if (pathKeys.has(key)) return
       pathKeys.add(key)
       paths.push({ path, length: pathLength, longestSegmentIndex })
+    }
+    if (traceCornersOnly) {
+      for (const corner of traceCorners) {
+        for (const firstPath of calculate45DegreePaths(start, corner)) {
+          for (const secondPath of calculate45DegreePaths(corner, end)) {
+            addPath([...firstPath, ...secondPath.slice(1)])
+          }
+        }
+      }
+      return paths
     }
     for (const corridorY of corridorYs) {
       addPath([
@@ -231,6 +362,17 @@ export class SingleRouteUselessViaRemovalSolver extends BaseSolver {
     nextSection: RouteSection,
   ): ViaPairShortcut | null {
     let bestShortcut: ViaPairShortcut | null = null
+    const validatePath = createObstacleDetourPathValidator({
+      targetZ: previousSection.z,
+      route: this.unsimplifiedRoute,
+      hdRouteSHI: this.hdRouteSHI,
+      obstacleSHI: this.obstacleSHI,
+      connMap: this.connMap,
+      defaultTraceThickness: this.TRACE_THICKNESS,
+      obstacleMargin: this.GEOMETRY_SHORTCUT_OBSTACLE_MARGIN,
+      traceMargin: this.GEOMETRY_SHORTCUT_TRACE_MARGIN,
+      useNumericSegmentKeys: true,
+    })
     for (
       let previousPointIndex = 0;
       previousPointIndex < previousSection.points.length;
@@ -260,26 +402,10 @@ export class SingleRouteUselessViaRemovalSolver extends BaseSolver {
           const path = this.normalizeShortcutPath(possiblePath, start, end)
           const savedLength =
             this.getPathLength(replacedPoints) - this.getPathLength(path)
-          if (savedLength < -1e-6 || this.shortcutCrossesOutline(path)) continue
+          if (savedLength < -1e-6) continue
 
-          const candidateSection: RouteSection = {
-            startIndex: previousSection.startIndex + previousPointIndex,
-            endIndex: nextSection.startIndex + nextPointIndex,
-            z: previousSection.z,
-            points: path,
-          }
-          const pathIsClear = canSectionMoveToLayer({
-            currentSection: candidateSection,
-            targetZ: previousSection.z,
-            route: this.unsimplifiedRoute,
-            hdRouteSHI: this.hdRouteSHI,
-            obstacleSHI: this.obstacleSHI,
-            connMap: this.connMap,
-            defaultTraceThickness: this.TRACE_THICKNESS,
-            obstacleMargin: this.GEOMETRY_SHORTCUT_OBSTACLE_MARGIN,
-            traceMargin: this.GEOMETRY_SHORTCUT_TRACE_MARGIN,
-          })
-          if (!pathIsClear) continue
+          const pathIsClear = validatePath(path, 0)
+          if (!pathIsClear || this.shortcutCrossesOutline(path)) continue
 
           if (!bestShortcut || savedLength > bestShortcut.savedLength) {
             bestShortcut = {
@@ -299,6 +425,7 @@ export class SingleRouteUselessViaRemovalSolver extends BaseSolver {
     previousSection: RouteSection,
     currentSection: RouteSection,
     nextSection: RouteSection,
+    traceCornersOnly = false,
   ): ViaPairShortcut | null {
     const transitionIndex = previousSection.points.length - 1
     const anchorPairs: Array<[number, number]> = []
@@ -319,6 +446,19 @@ export class SingleRouteUselessViaRemovalSolver extends BaseSolver {
       anchorPairs.push([transitionIndex, nextIndex])
     }
 
+    const earlyValidator = this.ENABLE_ROUTED_TRACE_DETOURS
+      ? createObstacleDetourPathValidator({
+          targetZ: previousSection.z,
+          route: this.unsimplifiedRoute,
+          hdRouteSHI: this.hdRouteSHI,
+          obstacleSHI: this.obstacleSHI,
+          connMap: this.connMap,
+          defaultTraceThickness: this.TRACE_THICKNESS,
+          obstacleMargin: this.GEOMETRY_SHORTCUT_OBSTACLE_MARGIN,
+          traceMargin: this.GEOMETRY_SHORTCUT_TRACE_MARGIN,
+          useNumericSegmentKeys: true,
+        })
+      : undefined
     const candidateShortcuts: ViaPairShortcut[] = []
     for (const [previousPointIndex, nextPointIndex] of anchorPairs) {
       const start = previousSection.points[previousPointIndex]
@@ -346,6 +486,8 @@ export class SingleRouteUselessViaRemovalSolver extends BaseSolver {
         end,
         previousSection.z,
         replacedLength + this.MAX_GEOMETRY_SHORTCUT_ADDED_LENGTH + 1e-6,
+        traceCornersOnly,
+        earlyValidator,
       )) {
         const savedLength = replacedLength - pathLength
         if (savedLength < -this.MAX_GEOMETRY_SHORTCUT_ADDED_LENGTH - 1e-6) {
@@ -370,7 +512,7 @@ export class SingleRouteUselessViaRemovalSolver extends BaseSolver {
     // searches switch to numeric IDs to avoid rebuilding coordinate strings for
     // thousands of candidates that repeatedly share corridor segments.
     const shouldUseNumericSegmentKeys = candidateShortcuts.length >= 256
-    const validateObstacleDetourPath = createObstacleDetourPathValidator({
+    const validateObstacleDetourPath = earlyValidator ?? createObstacleDetourPathValidator({
       targetZ: previousSection.z,
       route: this.unsimplifiedRoute,
       hdRouteSHI: this.hdRouteSHI,
@@ -409,6 +551,9 @@ export class SingleRouteUselessViaRemovalSolver extends BaseSolver {
     currentSection: RouteSection,
     nextSection: RouteSection,
   ): ViaPairShortcut | null {
+    // Corridor and corner searches share unchanged geometry for this section.
+    // Discard it before the next section, whose route/index may have changed.
+    this.detourContexts = new WeakMap()
     if (this.unsimplifiedRoute.jumpers?.length) return null
 
     if (this.ENABLE_GEOMETRY_SHORTCUTS) {
@@ -420,10 +565,20 @@ export class SingleRouteUselessViaRemovalSolver extends BaseSolver {
       if (directShortcut) return directShortcut
     }
     if (!this.ENABLE_OBSTACLE_DETOUR_SHORTCUTS) return null
+    const corridorShortcut = this.getObstacleDetourShortcut(
+      previousSection,
+      currentSection,
+      nextSection,
+    )
+    if (corridorShortcut || !this.ENABLE_ROUTED_TRACE_DETOURS) {
+      return corridorShortcut
+    }
+    // Generate the extra corner paths only after cheaper corridors fail.
     return this.getObstacleDetourShortcut(
       previousSection,
       currentSection,
       nextSection,
+      true,
     )
   }
 
@@ -729,6 +884,7 @@ export class SingleRouteUselessViaRemovalSolver extends BaseSolver {
       geometryShortcutObstacleMargin: this.GEOMETRY_SHORTCUT_OBSTACLE_MARGIN,
       enableGeometryShortcuts: this.ENABLE_GEOMETRY_SHORTCUTS,
       enableObstacleDetourShortcuts: this.ENABLE_OBSTACLE_DETOUR_SHORTCUTS,
+      enableRoutedTraceDetours: this.ENABLE_ROUTED_TRACE_DETOURS,
       preserveRouteEndpoints: this.PRESERVE_ROUTE_ENDPOINTS,
       terminalLayerIndicesByPcbPortId: this.terminalLayerIndicesByPcbPortId,
     }
