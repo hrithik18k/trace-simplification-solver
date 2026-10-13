@@ -102,8 +102,7 @@ test("SRJ18 sample 2 routed-copper vias", async (): Promise<void> => {
       line.label?.startsWith(`${fixture.source.focusConnectionName} (`),
     ),
     circles: graphics.circles!.filter(
-      (circle) =>
-        circle.label === `${fixture.source.focusConnectionName} via`,
+      (circle) => circle.label === `${fixture.source.focusConnectionName} via`,
     ),
   }
   let minX = Infinity
@@ -152,5 +151,8 @@ test("SRJ18 sample 2 routed-copper vias", async (): Promise<void> => {
       svgHeight: 600,
       hideInlineLabels: true,
     }),
-  ).toMatchSvgSnapshot(import.meta.path, { svgName: "most-improved-net", scale: 1 })
+  ).toMatchSvgSnapshot(import.meta.path, {
+    svgName: "most-improved-net",
+    scale: 1,
+  })
 })
