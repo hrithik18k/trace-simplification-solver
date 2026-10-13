@@ -151,7 +151,8 @@ export class SingleRouteUselessViaRemovalSolver extends BaseSolver {
                     this.unsimplifiedRoute.traceThickness,
                   path[index].traceThickness ??
                     this.unsimplifiedRoute.traceThickness,
-                ) / 2,
+                ) /
+                  2,
         })
       ) {
         return true
