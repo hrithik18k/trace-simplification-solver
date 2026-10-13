@@ -955,9 +955,17 @@ export class SingleSimplifiedPathSolver5 extends SingleSimplifiedPathSolver {
       this.tailDistanceAlongPath += this.minStepSize
       this.moveHead(this.minStepSize)
 
-      const newTailIndex = this.getNearestIndexForDistance(
+      let newTailIndex = this.getNearestIndexForDistance(
         this.tailDistanceAlongPath,
       )
+      // A minimum-size step can span a short segment and its via. Stop on
+      // the leaving layer so the layer-change handler preserves the via.
+      for (let i = tailIndex; i < newTailIndex; i++) {
+        if (this.inputRoute.route[i].z !== this.inputRoute.route[i + 1].z) {
+          newTailIndex = i
+          break
+        }
+      }
       const newTailPoint = this.inputRoute.route[newTailIndex]
       const lastRoutePoint =
         this.inputRoute.route[this.inputRoute.route.length - 1]

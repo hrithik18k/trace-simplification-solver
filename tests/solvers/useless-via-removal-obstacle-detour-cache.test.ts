@@ -1,8 +1,10 @@
 import { expect, test } from "bun:test"
 import { ConnectivityMap } from "circuit-json-to-connectivity-map"
-import { HighDensityRouteSpatialIndex } from "lib/data-structures/HighDensityRouteSpatialIndex"
-import { ObstacleSpatialHashIndex } from "lib/data-structures/ObstacleTree"
-import { SingleRouteUselessViaRemovalSolver } from "lib/solvers/UselessViaRemovalSolver/SingleRouteUselessViaRemovalSolver"
+import {
+  HighDensityRouteSpatialIndex,
+  ObstacleSpatialHashIndex,
+  SingleRouteUselessViaRemovalSolver,
+} from "../../index"
 import type { HighDensityRoute } from "lib/types/high-density-types"
 
 test("reuses segment clearance while still finding late detours", () => {
@@ -34,13 +36,13 @@ test("reuses segment clearance while still finding late detours", () => {
     vias: [],
   }
   const hdRouteSHI = new HighDensityRouteSpatialIndex([route, blockingRoute])
-  const originalGetConflicts =
-    hdRouteSHI.getConflictingRoutesForSegment.bind(hdRouteSHI)
+  const originalHasConflicts =
+    hdRouteSHI.hasConflictingRoutesForSegment.bind(hdRouteSHI)
   let detourGenerationStarted = false
   let segmentClearanceQueries = 0
-  hdRouteSHI.getConflictingRoutesForSegment = (...args) => {
+  hdRouteSHI.hasConflictingRoutesForSegment = (...args): boolean => {
     if (detourGenerationStarted) segmentClearanceQueries++
-    return originalGetConflicts(...args)
+    return originalHasConflicts(...args)
   }
   const solver = new SingleRouteUselessViaRemovalSolver({
     obstacleSHI: new ObstacleSpatialHashIndex("flatbush", []),

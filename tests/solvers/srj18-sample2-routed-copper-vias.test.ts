@@ -87,13 +87,13 @@ test("SRJ18 sample 2 routed-copper vias", async (): Promise<void> => {
       y: input.route.at(-1)!.y,
     })
   }
-  // Record the current limitation; the stacked fix lowers this to 506.
-  expect(viaCount).toBe(534)
+  // Bounded routed-copper detours remove another 28 vias from this board.
+  expect(viaCount).toBe(506)
   const focusInput = inputByName.get(fixture.source.focusConnectionName)!
   const focusOutput = output.find(
     (route) => route.connectionName === fixture.source.focusConnectionName,
   )!
-  expect(focusOutput.vias.length).toBe(6)
+  expect(focusOutput.vias.length).toBe(2)
 
   const graphics = solver.visualize()
   const focusGraphics = {
