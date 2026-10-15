@@ -1,3 +1,4 @@
+import { getMaximumViaDiameter } from "../../utils/getMaximumViaDiameter"
 import { segmentToBoxMinDistance } from "@tscircuit/math-utils"
 import type { ConnectivityMap } from "circuit-json-to-connectivity-map"
 import type { HighDensityRouteSpatialIndex } from "../../data-structures/HighDensityRouteSpatialIndex"
@@ -169,7 +170,7 @@ export const createObstacleDetourPathValidator = ({
           conflictingRoute.traceThickness ?? defaultTraceThickness
         const otherCopperRadius = Math.max(
           otherTraceThickness / 2,
-          conflictingRoute.viaDiameter / 2,
+          getMaximumViaDiameter(conflictingRoute) / 2,
         )
         const minDistance =
           currentTraceThickness / 2 + otherCopperRadius + traceMargin

@@ -216,7 +216,7 @@ export class MultiSimplifiedPathSolver extends BaseSolver {
       for (const via of route.vias || []) {
         graphics.circles.push({
           center: via,
-          radius: route.viaDiameter / 2,
+          radius: (via.diameter ?? route.viaDiameter) / 2,
           fill: "rgba(0, 0, 255, 0.5)",
           step: 1,
         })
@@ -241,10 +241,10 @@ export class MultiSimplifiedPathSolver extends BaseSolver {
       }
 
       // Add small circles at each point of the original route
-      for (const point of route.vias) {
+      for (const via of route.vias) {
         graphics.circles.push({
-          center: { x: point.x, y: point.y },
-          radius: route.viaDiameter / 2,
+          center: { x: via.x, y: via.y },
+          radius: (via.diameter ?? route.viaDiameter) / 2,
           fill: "rgba(255, 0, 0, 0.2)",
           step: 0,
         })
