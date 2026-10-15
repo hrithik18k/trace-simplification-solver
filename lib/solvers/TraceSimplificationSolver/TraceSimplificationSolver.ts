@@ -119,6 +119,7 @@ export class TraceSimplificationSolver extends BaseSolver {
       readonly otherHdRoutes?: ReadonlyArray<HighDensityRoute>
       readonly netByConnectionName?: ReadonlyMap<string, string>
       readonly enableCrossingViaReduction?: boolean
+      readonly enableRoutedTraceDetours?: boolean
       readonly preserveRouteEndpoints?: boolean
       readonly useTraceWidthAwareClearance?: boolean
       readonly enableVertexShortcuts?: boolean
@@ -355,6 +356,8 @@ export class TraceSimplificationSolver extends BaseSolver {
       switch (this.currentPhase) {
         case "via_removal":
           this.activeSubSolver = new UselessViaRemovalSolver({
+            enableRoutedTraceDetours:
+              this.simplificationConfig.enableRoutedTraceDetours,
             unsimplifiedHdRoutes: this.hdRoutes,
             otherHdRoutes: [...(this.simplificationConfig.otherHdRoutes ?? [])],
             obstacles: [...this.simplificationConfig.obstacles],

@@ -192,6 +192,82 @@ export class HighDensityRouteSpatialIndex {
     // console.timeEnd("HighDensityRouteSpatialIndex Constructor");
   }
 
+  /** Test clearance without collecting every conflicting route. */
+  hasConflictingRoutesForSegment(
+    segmentStart: Point,
+    segmentEnd: Point,
+    margin: number,
+    ignoreRoute: (route: HighDensityRoute) => boolean,
+    getMinimumSeparation?: (route: HighDensityRoute) => number,
+  ): boolean {
+    const bounds = getSegmentBounds([segmentStart, segmentEnd])
+    const expansion = margin + this.maximumCopperRadius
+    const minX = Math.floor((bounds.minX - expansion) / this.CELL_SIZE)
+    const maxX = Math.floor((bounds.maxX + expansion + 1e-9) / this.CELL_SIZE)
+    const minY = Math.floor((bounds.minY - expansion) / this.CELL_SIZE)
+    const maxY = Math.floor((bounds.maxY + expansion + 1e-9) / this.CELL_SIZE)
+    const checkedSegments = new Set<string>()
+    const checkedVias = new Set<string>()
+    for (let ix = minX; ix <= maxX; ix++) {
+      for (let iy = minY; iy <= maxY; iy++) {
+        const key = `${ix}x${iy}` as BucketCoordinate
+        const segments = this.segmentBuckets.get(key)
+        if (segments) {
+          for (const item of segments) {
+            const route = item.parentRoute
+            const [start, end] = item.segment
+            if (
+              segmentStart.z !== segmentEnd.z ||
+              start.z !== end.z ||
+              start.z !== segmentStart.z ||
+              ignoreRoute(route) ||
+              checkedSegments.has(item.segmentId)
+            ) {
+              continue
+            }
+            checkedSegments.add(item.segmentId)
+            const separation = margin + route.traceThickness / 2
+            const distanceSq = segmentToSegmentDistanceSq(
+              segmentStart,
+              segmentEnd,
+              start,
+              end,
+            )
+            if (
+              distanceSq < separation * separation &&
+              (!getMinimumSeparation ||
+                Math.sqrt(distanceSq) < getMinimumSeparation(route))
+            ) {
+              return true
+            }
+          }
+        }
+        const vias = this.viaBuckets.get(key)
+        if (vias) {
+          for (const item of vias) {
+            const route = item.parentRoute
+            if (ignoreRoute(route) || checkedVias.has(item.viaId)) continue
+            checkedVias.add(item.viaId)
+            const separation = margin + item.diameter / 2
+            const distanceSq = pointToSegmentDistanceSq(
+              item,
+              segmentStart,
+              segmentEnd,
+            )
+            if (
+              distanceSq < separation * separation &&
+              (!getMinimumSeparation ||
+                Math.sqrt(distanceSq) < getMinimumSeparation(route))
+            ) {
+              return true
+            }
+          }
+        }
+      }
+    }
+    return false
+  }
+
   /**
    * Finds routes that potentially conflict with a given line segment within a margin.
    * Checks both segments and vias.
@@ -204,6 +280,7 @@ export class HighDensityRouteSpatialIndex {
     segmentStart: Point, // Keep Point for original Z data if needed elsewhere
     segmentEnd: Point,
     margin: number, // Minimum required clearance
+    ignoreRoute?: (route: HighDensityRoute) => boolean,
   ): Array<{ conflictingRoute: HighDensityRoute; distance: number }> {
     const querySegment: Segment = [segmentStart, segmentEnd]
     const bounds = getSegmentBounds(querySegment)
@@ -259,6 +336,8 @@ export class HighDensityRouteSpatialIndex {
               continue
             }
 
+            if (ignoreRoute?.(route)) continue
+
             // Required separation distance from query centerline to segment edge
             const requiredSeparation = margin + route.traceThickness / 2
             const requiredSeparationSq = requiredSeparation * requiredSeparation
@@ -293,6 +372,7 @@ export class HighDensityRouteSpatialIndex {
             checkedVias.add(viaInfo.viaId)
 
             const route = viaInfo.parentRoute
+            if (ignoreRoute?.(route)) continue
             const viaPoint: Point2D = { x: viaInfo.x, y: viaInfo.y }
 
             // Required separation distance from query centerline to via edge
@@ -457,6 +537,7 @@ export class HighDensityRouteSpatialIndex {
   getConflictingRoutesNearPoint(
     point: Point3,
     margin: number, // Minimum required clearance
+    ignoreRoute?: (route: HighDensityRoute) => boolean,
   ): Array<{ conflictingRoute: HighDensityRoute; distance: number }> {
     // --- Define search area ---
     const broadPhaseMargin = margin + this.maximumCopperRadius

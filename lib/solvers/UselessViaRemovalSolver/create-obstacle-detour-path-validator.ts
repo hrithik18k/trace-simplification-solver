@@ -1,9 +1,9 @@
-import { getMaximumViaDiameter } from "../../utils/getMaximumViaDiameter"
 import { segmentToBoxMinDistance } from "@tscircuit/math-utils"
 import type { ConnectivityMap } from "circuit-json-to-connectivity-map"
 import type { HighDensityRouteSpatialIndex } from "../../data-structures/HighDensityRouteSpatialIndex"
 import type { ObstacleSpatialHashIndex } from "../../data-structures/ObstacleTree"
 import type { HighDensityRoute } from "../../types/high-density-types"
+import { getMaximumViaDiameter } from "../../utils/getMaximumViaDiameter"
 
 type RoutePoint = HighDensityRoute["route"][number]
 
@@ -22,7 +22,7 @@ export const createObstacleDetourPathValidator = ({
   route: HighDensityRoute
   hdRouteSHI: Pick<
     HighDensityRouteSpatialIndex,
-    "getConflictingRoutesForSegment"
+    "hasConflictingRoutesForSegment"
   >
   obstacleSHI: ObstacleSpatialHashIndex
   connMap: ConnectivityMap
@@ -83,6 +83,28 @@ export const createObstacleDetourPathValidator = ({
     (routeRootConnectionName !== undefined &&
       (connectedId === routeRootConnectionName ||
         connMap.areIdsConnected(connectedId, routeRootConnectionName)))
+
+  const routeIsSameNet = (candidate: HighDensityRoute): boolean => {
+    let isSameNet = routeIsSameNetCache.get(candidate)
+    if (isSameNet === undefined) {
+      isSameNet =
+        isConnectedToRoute(candidate.connectionName) ||
+        (candidate.rootConnectionName !== undefined &&
+          isConnectedToRoute(candidate.rootConnectionName))
+      routeIsSameNetCache.set(candidate, isSameNet)
+    }
+    return isSameNet
+  }
+
+  // Preserve the caller's exact clearance comparison and addition order at
+  // the boundary, rather than treating every broad-phase hit as a conflict.
+  const getMinimumSeparation = (candidate: HighDensityRoute): number =>
+    currentTraceThickness / 2 +
+    Math.max(
+      (candidate.traceThickness ?? defaultTraceThickness) / 2,
+      getMaximumViaDiameter(candidate) / 2,
+    ) +
+    traceMargin
 
   return (path: readonly RoutePoint[], firstSegmentIndex: number): boolean => {
     const segmentCount = path.length - 1
@@ -149,35 +171,17 @@ export const createObstacleDetourPathValidator = ({
         }
       }
 
-      const conflictingRoutes = hdRouteSHI.getConflictingRoutesForSegment(
-        A,
-        B,
-        routeSearchMargin,
-      )
-      for (const { conflictingRoute, distance } of conflictingRoutes) {
-        let conflictingRouteIsSameNet =
-          routeIsSameNetCache.get(conflictingRoute)
-        if (conflictingRouteIsSameNet === undefined) {
-          conflictingRouteIsSameNet =
-            isConnectedToRoute(conflictingRoute.connectionName) ||
-            (conflictingRoute.rootConnectionName !== undefined &&
-              isConnectedToRoute(conflictingRoute.rootConnectionName))
-          routeIsSameNetCache.set(conflictingRoute, conflictingRouteIsSameNet)
-        }
-        if (conflictingRouteIsSameNet) continue
-
-        const otherTraceThickness =
-          conflictingRoute.traceThickness ?? defaultTraceThickness
-        const otherCopperRadius = Math.max(
-          otherTraceThickness / 2,
-          getMaximumViaDiameter(conflictingRoute) / 2,
+      if (
+        hdRouteSHI.hasConflictingRoutesForSegment(
+          A,
+          B,
+          routeSearchMargin,
+          routeIsSameNet,
+          getMinimumSeparation,
         )
-        const minDistance =
-          currentTraceThickness / 2 + otherCopperRadius + traceMargin
-        if (distance < minDistance) {
-          segmentClearanceCache.set(segmentCacheKey, false)
-          return false
-        }
+      ) {
+        segmentClearanceCache.set(segmentCacheKey, false)
+        return false
       }
 
       segmentClearanceCache.set(segmentCacheKey, true)

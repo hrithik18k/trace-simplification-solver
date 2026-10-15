@@ -16,6 +16,16 @@ test("indexes individual via radii on creation and update", () => {
   for (const update of [false, true]) {
     const index = new HighDensityRouteSpatialIndex(update ? [] : [route])
     if (update) index.addRoute(route)
+    for (const [x, expected] of [[1.9, true], [11.9, false]] as const) {
+      expect(
+        index.hasConflictingRoutesForSegment(
+          { x, y: -1, z: 0 },
+          { x, y: 1, z: 0 },
+          0.1,
+          () => false,
+        ),
+      ).toBe(expected)
+    }
     expect(
       index.getConflictingRoutesNearPoint({ x: 1.9, y: 0, z: 0 }, 0.1),
     ).toHaveLength(1)

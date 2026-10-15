@@ -24,6 +24,8 @@ export interface UselessViaRemovalSolverInput {
   geometryShortcutObstacleMargin?: number
   enableGeometryShortcuts?: boolean
   enableObstacleDetourShortcuts?: boolean
+  /** Generate bounded same-layer detours around routed copper. */
+  enableRoutedTraceDetours?: boolean
   /** Keep the first and last route points on their original layers. */
   preserveRouteEndpoints?: boolean
   /**
@@ -100,6 +102,7 @@ export class UselessViaRemovalSolver extends BaseSolver {
       geometryShortcutObstacleMargin: this.input.geometryShortcutObstacleMargin,
       enableGeometryShortcuts: this.input.enableGeometryShortcuts,
       enableObstacleDetourShortcuts: this.input.enableObstacleDetourShortcuts,
+      enableRoutedTraceDetours: this.input.enableRoutedTraceDetours,
       preserveRouteEndpoints: this.input.preserveRouteEndpoints,
       terminalLayerIndicesByPcbPortId:
         this.input.terminalLayerIndicesByPcbPortId,
