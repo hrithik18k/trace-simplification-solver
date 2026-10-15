@@ -25,14 +25,16 @@ export const createMixedViaVisualInput = (): ConstructorParameters<
   }
   return {
     hdRoutes: [route],
-    obstacles: [{
-      type: "rect" as const,
-      layers: ["top"],
-      center: { x: 3, y: 0 },
-      width: 0.5,
-      height: 4,
-      connectedTo: [],
-    }],
+    obstacles: [
+      {
+        type: "rect" as const,
+        layers: ["top"],
+        center: { x: 3, y: 0 },
+        width: 0.5,
+        height: 4,
+        connectedTo: [],
+      },
+    ],
     connMap: new ConnectivityMap({ signal: ["signal"] }),
     colorMap: {},
     defaultViaDiameter: 0.6,

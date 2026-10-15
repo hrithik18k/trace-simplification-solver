@@ -507,7 +507,7 @@ export class HighDensityRouteSpatialIndex {
 
         const storedVia: StoredVia = {
           viaId: `${route.connectionName}-via-${i}`,
-            diameter: via.diameter ?? route.viaDiameter,
+          diameter: via.diameter ?? route.viaDiameter,
           x: via.x,
           y: via.y,
           parentRoute: route,

@@ -847,8 +847,7 @@ export class SingleSimplifiedPathSolver5 extends SingleSimplifiedPathSolver {
       const indexAfterLayerChange =
         this.getNearestIndexForDistance(layerChangeAtDistance) + 1
       const pointAfterChange = this.inputRoute.route[indexAfterLayerChange]
-      const pointBeforeChange =
-        this.inputRoute.route[indexAfterLayerChange - 1]
+      const pointBeforeChange = this.inputRoute.route[indexAfterLayerChange - 1]
       const throughObstacle =
         pointBeforeChange.toNextSegmentType === "through_obstacle"
       const viaLocation = {
