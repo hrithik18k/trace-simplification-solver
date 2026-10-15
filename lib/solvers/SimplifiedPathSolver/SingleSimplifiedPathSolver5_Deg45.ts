@@ -266,7 +266,10 @@ export class SingleSimplifiedPathSolver5 extends SingleSimplifiedPathSolver {
           minY <= bounds.maxY &&
           maxY >= bounds.minY
         ) {
-          filteredVias.push({ ...via, diameter: via.diameter ?? hdRoute.viaDiameter })
+          filteredVias.push({
+            ...via,
+            diameter: via.diameter ?? hdRoute.viaDiameter,
+          })
         }
       }
       return filteredVias
