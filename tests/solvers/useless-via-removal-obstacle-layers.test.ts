@@ -17,7 +17,10 @@ test("via removal checks pad clearance only on the destination copper layer", ()
       { x: 1, y: 0, z: 1 },
       { x: 2, y: 0, z: 1 },
     ],
-    vias: [{ x: -1, y: 0 }, { x: 1, y: 0 }],
+    vias: [
+      { x: -1, y: 0 },
+      { x: 1, y: 0 },
+    ],
   }
   for (const layers of [["top"], ["bottom"], ["inner1"], ["top", "inner1"]]) {
     const obstacle: Obstacle = {
@@ -32,7 +35,10 @@ test("via removal checks pad clearance only on the destination copper layer", ()
     const solver = new UselessViaRemovalSolver({
       unsimplifiedHdRoutes: [input],
       obstacles: [obstacle],
-      connMap: new ConnectivityMap({ signal: ["signal"], other_net: ["other_net"] }),
+      connMap: new ConnectivityMap({
+        signal: ["signal"],
+        other_net: ["other_net"],
+      }),
       colorMap: {},
       layerCount: 4,
       preserveRouteEndpoints: true,

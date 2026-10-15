@@ -7,7 +7,10 @@ import type { HighDensityRoute } from "lib/types/high-density-types"
 import type { Obstacle } from "lib/types"
 
 test("detour clearance and its cache respect the obstacle copper layers", (): void => {
-  const path = [{ x: -1, y: 0, z: 1 }, { x: 1, y: 0, z: 1 }]
+  const path = [
+    { x: -1, y: 0, z: 1 },
+    { x: 1, y: 0, z: 1 },
+  ]
   const route: HighDensityRoute = {
     connectionName: "signal",
     traceThickness: 0.15,
@@ -31,7 +34,10 @@ test("detour clearance and its cache respect the obstacle copper layers", (): vo
         route,
         hdRouteSHI: new HighDensityRouteSpatialIndex([route]),
         obstacleSHI: new ObstacleSpatialHashIndex("flatbush", [obstacle]),
-        connMap: new ConnectivityMap({ signal: ["signal"], other_net: ["other_net"] }),
+        connMap: new ConnectivityMap({
+          signal: ["signal"],
+          other_net: ["other_net"],
+        }),
         defaultTraceThickness: 0.15,
         obstacleMargin: 0.1,
         traceMargin: 0.1,

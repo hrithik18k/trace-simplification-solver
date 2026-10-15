@@ -7,16 +7,21 @@ import { UselessViaRemovalSolver } from "lib/solvers/UselessViaRemovalSolver/Use
 
 type CapturedInput = {
   source: { targetConnectionName: string; configSha256: string }
-  config: Omit<ConstructorParameters<typeof UselessViaRemovalSolver>[0], "connMap"> & {
+  config: Omit<
+    ConstructorParameters<typeof UselessViaRemovalSolver>[0],
+    "connMap"
+  > & {
     connMap: Record<string, string[]>
   }
 }
 
 test("bugreport107 removes a via pair hidden by pads on other copper layers", (): void => {
-  const captureFile = readFileSync(new URL(
-    "../fixtures/bug-reports/bugreport107-obstacle-layers/via-removal-input.json.gz",
-    import.meta.url,
-  ))
+  const captureFile = readFileSync(
+    new URL(
+      "../fixtures/bug-reports/bugreport107-obstacle-layers/via-removal-input.json.gz",
+      import.meta.url,
+    ),
+  )
   const capture = JSON.parse(
     gunzipSync(new Uint8Array(captureFile)).toString("utf8"),
   ) as CapturedInput
