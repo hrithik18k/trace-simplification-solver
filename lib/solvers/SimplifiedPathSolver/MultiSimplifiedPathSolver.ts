@@ -187,7 +187,8 @@ export class MultiSimplifiedPathSolver extends BaseSolver {
       for (const via of route.vias || []) {
         graphics.circles.push({
           center: via,
-          radius: (route.viaDiameter ?? this.defaultViaDiameter) / 2,
+          radius:
+            (via.diameter ?? route.viaDiameter ?? this.defaultViaDiameter) / 2,
           fill: "rgba(0, 0, 255, 0.4)",
         })
       }
